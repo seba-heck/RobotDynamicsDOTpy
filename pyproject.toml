@@ -21,6 +21,7 @@ dependencies = [
 [tool.uv.build-backend]
 module-name = [
     "RobotArmIRB120",
+    "LeggedRobotDog",
 ]
 
 [build-system]

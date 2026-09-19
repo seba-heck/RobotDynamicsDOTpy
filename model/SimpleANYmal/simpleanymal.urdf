@@ -1,0 +1,560 @@
+<?xml version="1.0"?>
+
+  <!-- ============================================================
+       LeggedRobotModel
+       
+       Numerical parameters taken from:
+       mparams = [
+         9.81  0.1  0.6  0.3  0.3  0.15 0.3 0.3 0.3 0.3
+         10.0  0.5  0.5  0.1  0.5  0.5 0.5 0.5
+         0.02 0.02 0.015 0.015 0.015 0.02 0.015 0.015 0.2
+       ]
+
+       Coordinate system:
+         X = forward/backward
+         Y = joint axis / lateral direction
+         Z = vertical
+
+       All revolute joints:
+         axis = Y = [0 1 0]
+       ============================================================ -->
+<robot name="SimpleANYmal">
+
+  <link name="world"/>
+
+  <!-- ============================================================
+       BASE
+       
+       l_B = 0.60
+       w_B = 0.20
+       h_B = 0.10
+       m_B = 10.0
+       
+       Cuboid inertia:
+         Ixx = m/12 (w^2 + h^2)
+         Iyy = m/12 (l^2 + h^2)
+         Izz = m/12 (l^2 + w^2)
+       ============================================================ -->
+  <link name="base">
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="10.0"/>
+      <inertia ixx="0.0416666667" ixy="0" ixz="0" iyy="0.3083333333" iyz="0" izz="0.3333333333"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.60 0.20 0.10"/>
+      </geometry>
+
+      <material name="base_color">
+        <color rgba="0.773 0.675 0.792 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.60 0.20 0.10"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+  <!-- ============================================================
+       PLANAR BASE JOINT
+       
+       Represents:
+         x_B
+         z_B
+         theta_B
+       
+       The motion plane is X-Z.
+       Plane normal is Y.
+       ============================================================ -->
+  <joint name="base_planar_joint" type="planar">
+    <parent link="world"/>
+    <child link="base"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- ============================================================
+       HIND / REAR THIGH
+       
+       MATLAB names:
+         HT
+       
+       Parameter names:
+         RT
+       
+       l_RT = 0.30
+       r_RT = 0.015
+       m_RT = 0.50
+       ============================================================ -->
+
+  <link name="hind_thigh">
+
+    <inertial>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <mass value="0.50"/>
+      <inertia ixx="0.00188203125" ixy="0" ixz="0" iyy="0.00188203125" iyz="0" izz="0.00005625"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+
+      <material name="leg_color">
+        <color rgba="0.60 0.60 0.60 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="hind_hip" type="revolute">
+
+    <parent link="base"/>
+    <child link="hind_thigh"/>
+
+    <origin xyz="-0.30 0 -0.05" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+
+  </joint>
+
+  <!-- ============================================================
+       HIND / REAR SHANK
+       
+       MATLAB name:
+         HS
+       
+       Parameter name:
+         RS
+       
+       l_RS = 0.30
+       r_RS = 0.015
+       m_RS = 0.50
+       ============================================================ -->
+  <link name="hind_shank">
+
+    <inertial>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <mass value="0.50"/>
+      <inertia ixx="0.00188203125" ixy="0" ixz="0" iyy="0.00188203125" iyz="0" izz="0.00005625"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+
+      <material name="leg_color"/>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="hind_knee" type="revolute">
+
+    <parent link="hind_thigh"/>
+    <child link="hind_shank"/>
+
+    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+
+  </joint>
+
+
+  <!-- ============================================================
+       HIND FOOT
+       
+       r_RF = 0.020
+       
+       Foot is massless in original model because no mass
+       parameter is provided for it.
+       ============================================================ -->
+  <link name="hind_foot">
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.00000000016" ixy="0" ixz="0" iyy="0.00000000016" iyz="0" izz="0.00000000016"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.020"/>
+      </geometry>
+
+      <material name="foot_color">
+        <color rgba="0.80 0.60 0.60 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.020"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="hind_foot_joint" type="fixed">
+
+    <parent link="hind_shank"/>
+    <child link="hind_foot"/>
+    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
+
+  </joint>
+
+
+  <!-- ============================================================
+       FRONT THIGH
+       
+       l_FT = 0.30
+       r_FT = 0.015
+       m_FT = 0.50
+       ============================================================ -->
+
+  <link name="front_thigh">
+
+    <inertial>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <mass value="0.50"/>
+      <inertia ixx="0.00188203125" ixy="0" ixz="0" iyy="0.00188203125" iyz="0" izz="0.00005625"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+      <material name="leg_color"/>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="front_hip" type="revolute">
+
+    <parent link="base"/>
+    <child link="front_thigh"/>
+
+    <origin xyz="0.30 0 -0.05" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+
+  </joint>
+
+
+  <!-- ============================================================
+       FRONT SHANK
+       
+       l_FS = 0.30
+       r_FS = 0.015
+       m_FS = 0.50
+       ============================================================ -->
+  <link name="front_shank">
+
+    <inertial>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <mass value="0.50"/>
+      <inertia ixx="0.00188203125" ixy="0" ixz="0" iyy="0.00188203125" iyz="0" izz="0.00005625"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+      <material name="leg_color"/>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="front_knee" type="revolute">
+
+    <parent link="front_thigh"/>
+    <child link="front_shank"/>
+
+    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+
+  </joint>
+
+
+  <!-- ============================================================
+       FRONT FOOT
+       
+       r_FF = 0.020
+       ============================================================ -->
+  <link name="front_foot">
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.00000000016" ixy="0" ixz="0" iyy="0.00000000016" iyz="0" izz="0.00000000016"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.020"/>
+      </geometry>
+      <material name="foot_color"/>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.020"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+  <joint name="front_foot_joint" type="fixed">
+
+    <parent link="front_shank"/>
+    <child link="front_foot"/>
+    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
+
+  </joint>
+
+
+  <!-- ============================================================
+       UPPER ARM
+       
+       l_UA = 0.30
+       r_UA = 0.015
+       m_UA = 0.50
+       
+       MATLAB CoM:
+         [0 0 l_UA/2]
+       ============================================================ -->
+  <link name="upper_arm">
+
+    <inertial>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <mass value="0.50"/>
+      <inertia ixx="0.00188203125" ixy="0" ixz="0" iyy="0.00188203125" iyz="0" izz="0.00005625"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+
+      <material name="arm_color">
+        <color rgba="0.60 0.60 0.60 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="shoulder" type="revolute">
+
+    <parent link="base"/>
+    <child link="upper_arm"/>
+
+    <origin xyz="0.15 0 0.05" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+
+  </joint>
+
+  <!-- ============================================================
+       LOWER ARM
+       
+       l_LA = 0.30
+       r_LA = 0.015
+       m_LA = 0.50
+       ============================================================ -->
+  <link name="lower_arm">
+
+    <inertial>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <mass value="0.50"/>
+      <inertia ixx="0.00188203125" ixy="0" ixz="0" iyy="0.00188203125" iyz="0" izz="0.00005625"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+      <material name="arm_color"/>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.30"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="elbow" type="revolute">
+
+    <parent link="upper_arm"/>
+    <child link="lower_arm"/>
+
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+  </joint>
+
+
+  <!-- ============================================================
+       HAND
+       
+       l_HA = 0.15
+       r_HA = 0.015
+       m_HA = 0.10
+       ============================================================ -->
+
+  <link name="hand">
+
+    <inertial>
+      <origin xyz="0 0 0.075" rpy="0 0 0"/>
+      <mass value="0.10"/>
+      <inertia ixx="0.00018796875" ixy="0" ixz="0" iyy="0.00018796875" iyz="0" izz="0.00001125"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 -0.075" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.15"/>
+      </geometry>
+      <material name="arm_color"/>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 -0.075" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.015" length="0.15"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="wrist" type="revolute">
+    <parent link="lower_arm"/>
+    <child link="hand"/>
+
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
+
+    <axis xyz="0 1 0"/>
+
+    <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+  </joint>
+
+
+  <!-- ============================================================
+       END EFFECTOR
+       
+       r_EE = 0.020
+       
+       No mass parameter exists in mparams, so it is effectively
+       treated as massless.
+       ============================================================ -->
+  <link name="end_effector">
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.00000000016" ixy="0" ixz="0" iyy="0.00000000016" iyz="0" izz="0.00000000016"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.020"/>
+      </geometry>
+      <material name="ee_color">
+        <color rgba="0.80 0.60 0.60 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.020"/>
+      </geometry>
+    </collision>
+
+  </link>
+
+
+  <joint name="end_effector_joint" type="fixed">
+    <parent link="hand"/>
+    <child link="end_effector"/>
+    <origin xyz="0 0 0.15" rpy="0 0 0"/>
+  </joint>
+
+</robot>
