@@ -1,0 +1,28 @@
+[project]
+name = "robotdynamicsdotpy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "seba-heck", email = "seheckers@gmail.com" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "dill>=0.4.0",
+    "matplotlib",
+    "pyglet<2",
+    "pytest>=8.3.5",
+    "sympy>=1.13.3",
+    "tqdm>=4.70.0",
+    "trimesh>=4.12.2",
+    "yourdfpy>=0.0.60",
+]
+
+[tool.uv.build-backend]
+module-name = [
+    "RobotArmIRB120",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.4,<0.13.0"]
+build-backend = "uv_build"
