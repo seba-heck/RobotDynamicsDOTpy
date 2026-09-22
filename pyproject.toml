@@ -18,6 +18,11 @@ dependencies = [
     "yourdfpy>=0.0.60",
 ]
 
+[project.optional-dependencies]
+mujoco = [
+    "mujoco>=3.2.3",
+]
+
 [tool.uv.build-backend]
 module-name = [
     "RobotArmIRB120",
