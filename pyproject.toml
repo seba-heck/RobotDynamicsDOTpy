@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mujoco = [
+    "mediapy>=1.2.7",
     "mujoco>=3.2.3",
 ]
 
