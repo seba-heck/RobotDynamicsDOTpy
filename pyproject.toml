@@ -26,6 +26,7 @@ mujoco = [
 
 [tool.uv.build-backend]
 module-name = [
+    "Common",
     "RobotArmIRB120",
 ]
 

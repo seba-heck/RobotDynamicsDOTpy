@@ -22,8 +22,9 @@ import sys
 import math
 import argparse
 
-from mjc_sim_lib import * # ProgramParameters
+# from mjc_sim_lib import * # ProgramParameters
 import RobotArmIRB120 as irb
+from Common import *
 import sympy as sp
 
 
@@ -73,7 +74,15 @@ if __name__ == "__main__":
     # make parameters
     params = ProgramParameters(args,__file__)
 
+    q_0 = np.zeros(6)
+    dq_0 = np.zeros(6)
+
+    # desired goals
+    _move_r_des = lambda t_i:( irb.jointToPosition(q_0) + np.array([0, 0.2*np.sin(2*np.pi*t_i*0.3), 0.2*np.cos(2*np.pi*t_i*0.3)]) ).reshape((3,1))
     q_des = np.ones(6)
+    r_des = irb.jointToPosition(q_0).reshape((3,1)) + np.ones((3,1))*0.1 # _move_r_des(0.0) if flag_moving else irb.jointToPosition(q_0).reshape((3,1)) + np.ones((3,1))*0.1
+    eul_des = irb.rotMatToEulAngXYZ(irb.jointToRotMat(q_0)).reshape((3,1))
+    I_F_Ex = 10
 
     # LOADING KINEMATICS / EOM
     print(f"[START] Loading robot dynamics, EoM ...", end=" ", flush=True)
@@ -82,8 +91,7 @@ if __name__ == "__main__":
     kin = irb.generate_kinematics_sp(phi)
     jac = irb.generate_jacobian_sp(phi,dphi,kin,bot)
 
-    J_ = jac["I_Je"]
-    Jt = sp.lambdify(phi, J_, "numpy")
+    I_Je = sp.lambdify(phi, jac["I_Je"], "numpy")
     I_dJe = sp.lambdify((*phi,*dphi), jac["I_dJe"], "numpy")
     I_Jpe = sp.lambdify(phi, jac["I_Jpe"], "numpy")
     eom = irb.load_EOM()
@@ -98,7 +106,7 @@ if __name__ == "__main__":
     # set simulation parameters
     m.opt.integrator = params.integrator_type
     m.opt.solver = params.solver_type
-    m.opt.timestep = 0.00001 # 0.000025
+    m.opt.timestep = 0.01 # 0.000025
 
     # make data
     d = mujoco.MjData(m)
@@ -139,7 +147,6 @@ if __name__ == "__main__":
     t_view = Timer()
     t_render = Timer()
 
-
     hist_ = [(q_i, dq_i, np.zeros(6), H(q_i,dq_i), E_kin(q_i,dq_i), E_pot(q_i), t)]
 
     print("# --- Start Simulation --- #")
@@ -148,8 +155,26 @@ if __name__ == "__main__":
     # timeloop
     while (params.flag_headless or viewer.is_running()) and (params.flag_endless or t < params.total_time):
 
+        # Evaluate robot dynamics
+        M_i = np.asarray(eom["M"](*q_i), dtype=float)
+        b_i = np.asarray(eom["b"](*q_i, *dq_i), dtype=float).reshape(-1, 1)
         g_i = np.asarray(eom["g"](*q_i), dtype=float).reshape(-1, 1)
-        tau = irb.control_pd_g(q_des, q_i, dq_i, g_i).reshape(-1)
+        J_i = np.asarray(I_Je(*q_i), dtype=float)
+        dJe_i = np.asarray(I_dJe(*q_i, *dq_i), dtype=float)
+
+        # # evaluate controller and feedback
+        # if controller["type"] == "PDg":
+        #     tau = control_pd_g(controller["q_des"], q, dq, g_i)
+        # elif controller["type"] == "INV":
+        #     tau = control_inv_dyn(controller["r_des"], controller["eul_des"], q, dq, M_i, b_i, g_i, J_i, dJe_i)
+        # elif controller["type"] == "OPS":
+        #     tau = control_op_space_hybrid(controller["r_des"], controller["eul_des"], q, dq, controller["I_F_Ex"], M_i, b_i, g_i, J_i, dJe_i)
+        #     f_ext = controller["reaction_collision_model"](q, dq)
+    
+        # tau = irb.control_pd_g(q_des, q_i, dq_i, g_i).reshape(-1)
+        r_des = _move_r_des(t)
+        tau = irb.control_inv_dyn(r_des, eul_des, q_i, dq_i, M_i, b_i, g_i, J_i, dJe_i).reshape(-1)
+
         d.ctrl = tau
 
         # step the physics
@@ -241,6 +266,12 @@ if __name__ == "__main__":
     print(" Real-Time-factor: %f" % (t/t_all.get_cpu_time()))
 
     # glfw.terminate()
+
+    t = [h for _,_,_,_,_,_,h in hist_]
+    plotting_history_energy(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_energy.png")
+    plotting_history_joints(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_q.png")
+    # plotting_history_pos(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_pos.png",x_des=np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_]))
+    plotting_history_pos(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_pos.png",x_des=np.array([list(_move_r_des(t_i)) for t_i in t]))
 
     print("# --- Finish Program --- #")
     sys.exit()
