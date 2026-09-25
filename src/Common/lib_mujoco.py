@@ -32,6 +32,7 @@ class ProgramParameters:
         # simulation
         self.solver_type     = args.solver_type     if (args.solver_type >= 0)     else 1  # default solver = CG
         self.integrator_type = args.integrator_type if (args.integrator_type >= 0) else 0  # default integrator = Euler
+        self.solver_dt = 0.001
         self.flag_draw_contacts = False
         self.flag_compute_pressure = False
 
@@ -55,6 +56,36 @@ class ProgramParameters:
         self.particle_state_tensor = []
         self.dt_save = 0.01
 
+        # ctrl
+        self.method = args.ctrl
+        self.flag_moving = True
+
+class ControlPDgParameters(ProgramParameters):
+    def __init__(self, args, name):
+        super().__init__(args, name)
+        self.total_time = 1.5
+        self.flag_moving = False
+        self.solver_dt = 0.00001
+
+class ControlINVParameters(ProgramParameters):
+    def __init__(self, args, name):
+        super().__init__(args, name)
+        self.total_time = 10.0
+        self.flag_moving = True
+        self.solver_dt = 0.01
+
+class ControlOPSParameters(ProgramParameters):
+    def __init__(self, args, name):
+        super().__init__(args, name)
+        self.total_time = 5.0
+        self.flag_moving = True
+        self.solver_dt = 0.0001
+
+CTRL_CLASS = {
+    "PDg": ControlPDgParameters,
+    "INV": ControlINVParameters,
+    "OPS": ControlOPSParameters,
+}
 
 def make_output_line(len=32):
     return "|"+len*"-"+"|\n"

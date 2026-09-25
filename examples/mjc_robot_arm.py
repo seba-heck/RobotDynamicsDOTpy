@@ -1,8 +1,7 @@
 """
 MuJoCo Python BASIC EXAMPLE
 
-created by Sebastin Heckers on 12.11.2023
-based on the IsaacGym example: isaacgym/python/basic.py
+created by Sebastin Heckers
 """
 
 from datetime import datetime

@@ -1,8 +1,7 @@
 """
-MuJoCo Python BASIC EXAMPLE
+MuJoCo Python EXAMPLE OF MODEL-BASED CTRL for ROBOT ARM
 
-created by Sebastin Heckers on 12.11.2023
-based on the IsaacGym example: isaacgym/python/basic.py
+created by Sebastin Heckers
 """
 
 from datetime import datetime
@@ -39,19 +38,19 @@ def key_callback(keycode):
         print("Pause, ", paused)
         paused = not paused
 
-def create_camera(gym,env,actor):
-    cam_pos = gymapi.Vec3(-20.0,25.0,5.0)
-    cam_target = gymapi.Vec3(0.0,5.0,1.0)
-    cam_props = gymapi.CameraProperties()
-    cam_props.width = 720
-    cam_props.height = 720
+# def create_camera(gym,env,actor):
+#     cam_pos = gymapi.Vec3(-20.0,25.0,5.0)
+#     cam_target = gymapi.Vec3(0.0,5.0,1.0)
+#     cam_props = gymapi.CameraProperties()
+#     cam_props.width = 720
+#     cam_props.height = 720
 
-    cam = gym.create_camera_sensor(env, cam_props)
-    body = gym.get_actor_rigid_body_handle(env, actor, 0)
-    gym.attach_camera_to_body(cam, env, body, gymapi.Transform(p=cam_pos), gymapi.FOLLOW_TRANSFORM)
-    gym.set_camera_location(cam, env, cam_pos, cam_target)
+#     cam = gym.create_camera_sensor(env, cam_props)
+#     body = gym.get_actor_rigid_body_handle(env, actor, 0)
+#     gym.attach_camera_to_body(cam, env, body, gymapi.Transform(p=cam_pos), gymapi.FOLLOW_TRANSFORM)
+#     gym.set_camera_location(cam, env, cam_pos, cam_target)
 
-    return cam
+#     return cam
 
 if __name__ == "__main__":
     print("# --- Prepare Simulation --- #")
@@ -61,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument('--scene', type=str, help='Input file for the scene.')
     # parser.add_argument('--config', type=str, default="config.yaml", help='Configuration file for the simulation.')
     parser.add_argument('--output', type=str, default="output.txt", help='Output file for the results.')
+    parser.add_argument('--ctrl', type=str, default="PDg", help='Controller method: PDg, INV, OPS.')
     parser.add_argument('--save_images', action="store_true", help='Store Images To Disk.')
     parser.add_argument('--headless', action="store_true", help='Run without viewer.')
     parser.add_argument('--solver_type', type=int, default=-1, help='Set solver type.')
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         os.mkdir(args.output)
 
     # make parameters
-    params = ProgramParameters(args,__file__)
+    params = CTRL_CLASS.get(args.ctrl, ProgramParameters)(args,__file__)
 
     q_0 = np.zeros(6)
     dq_0 = np.zeros(6)
@@ -99,6 +99,27 @@ if __name__ == "__main__":
     H,E_kin,E_pot = irb.make_energies(eom)
 
     print(f"[DONE]")
+    
+    def reaction_collision_model(q,dq,Jpe=I_Jpe,x_wall=0.4,alpha=500.0):
+        r_ = irb.jointToPosition(q)[0] - x_wall #+ 0.05
+        v_ = (Jpe(*q) @ dq.reshape(6, 1))[0, 0]
+
+        k = 180000.0
+        d = 2000.0
+
+        # activation = -1.0 / (1.0 + np.exp(-alpha * r_))
+        # activation = 0.5 * (1.0 + np.tanh(alpha * r_))
+        # activation = np.logaddexp(0,alpha*r_)
+        # activation = np.maximum(0,activation)
+        activation = 1.0 if r_ >= 0.0 else 0.0
+
+        f_ = activation * (
+            -k * r_ * np.array([1, 0, 0, 0, 0, 0])
+            -d * v_ * np.array([1, 0, 0, 0, 0, 0])
+        )
+        f_ = np.minimum(0,f_) #* 0.00001
+
+        return f_.reshape((6, 1))
 
     # load and compile model
     m = mujoco.MjModel.from_xml_path(args.scene)
@@ -106,7 +127,7 @@ if __name__ == "__main__":
     # set simulation parameters
     m.opt.integrator = params.integrator_type
     m.opt.solver = params.solver_type
-    m.opt.timestep = 0.01 # 0.000025
+    m.opt.timestep = params.solver_dt # 0.000025
 
     # make data
     d = mujoco.MjData(m)
@@ -155,26 +176,42 @@ if __name__ == "__main__":
     # timeloop
     while (params.flag_headless or viewer.is_running()) and (params.flag_endless or t < params.total_time):
 
-        # Evaluate robot dynamics
-        M_i = np.asarray(eom["M"](*q_i), dtype=float)
-        b_i = np.asarray(eom["b"](*q_i, *dq_i), dtype=float).reshape(-1, 1)
-        g_i = np.asarray(eom["g"](*q_i), dtype=float).reshape(-1, 1)
-        J_i = np.asarray(I_Je(*q_i), dtype=float)
-        dJe_i = np.asarray(I_dJe(*q_i, *dq_i), dtype=float)
+        if params.flag_moving:
+            r_des = _move_r_des(t)
 
-        # # evaluate controller and feedback
-        # if controller["type"] == "PDg":
-        #     tau = control_pd_g(controller["q_des"], q, dq, g_i)
-        # elif controller["type"] == "INV":
-        #     tau = control_inv_dyn(controller["r_des"], controller["eul_des"], q, dq, M_i, b_i, g_i, J_i, dJe_i)
-        # elif controller["type"] == "OPS":
-        #     tau = control_op_space_hybrid(controller["r_des"], controller["eul_des"], q, dq, controller["I_F_Ex"], M_i, b_i, g_i, J_i, dJe_i)
-        #     f_ext = controller["reaction_collision_model"](q, dq)
-    
-        # tau = irb.control_pd_g(q_des, q_i, dq_i, g_i).reshape(-1)
-        r_des = _move_r_des(t)
-        tau = irb.control_inv_dyn(r_des, eul_des, q_i, dq_i, M_i, b_i, g_i, J_i, dJe_i).reshape(-1)
+        # APPLY CONTROL METHODS
+        if args.ctrl == "PDg":
+            # evaluate gravity term
+            g_i = np.asarray(eom["g"](*q_i), dtype=float).reshape(-1, 1)
+            # evaluate PD + gravity controller
+            tau = irb.control_pd_g(q_des, q_i, dq_i, g_i).reshape(-1)
+        
+        elif args.ctrl == "INV":
+            # evaluate robot kinematics
+            M_i = np.asarray(eom["M"](*q_i), dtype=float)
+            b_i = np.asarray(eom["b"](*q_i, *dq_i), dtype=float).reshape(-1, 1)
+            g_i = np.asarray(eom["g"](*q_i), dtype=float).reshape(-1, 1)
+            J_i = np.asarray(I_Je(*q_i), dtype=float)
+            dJe_i = np.asarray(I_dJe(*q_i, *dq_i), dtype=float)
+            # evaluate inverse controller
+            tau = irb.control_inv_dyn(r_des, eul_des, q_i, dq_i, M_i, b_i, g_i, J_i, dJe_i).reshape(-1)
 
+        elif args.ctrl == "OPS":
+            # evaluate robot kinematics
+            M_i = np.asarray(eom["M"](*q_i), dtype=float)
+            b_i = np.asarray(eom["b"](*q_i, *dq_i), dtype=float).reshape(-1, 1)
+            g_i = np.asarray(eom["g"](*q_i), dtype=float).reshape(-1, 1)
+            J_i = np.asarray(I_Je(*q_i), dtype=float)
+            dJe_i = np.asarray(I_dJe(*q_i, *dq_i), dtype=float)
+            # evaluate hybrid controller in operation-space
+            tau = irb.control_op_space_hybrid(r_des, eul_des, q_i, dq_i, I_F_Ex, M_i, b_i, g_i, J_i, dJe_i).reshape(-1)
+            # calculate force feedback (wall)
+            d.xfrc_applied = reaction_collision_model(q_i, dq_i).reshape(-1)
+
+        else:
+            tau = np.zeros(6)
+
+        # update ctrl
         d.ctrl = tau
 
         # step the physics
@@ -268,10 +305,12 @@ if __name__ == "__main__":
     # glfw.terminate()
 
     t = [h for _,_,_,_,_,_,h in hist_]
-    plotting_history_energy(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_energy.png")
-    plotting_history_joints(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_q.png")
-    # plotting_history_pos(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_pos.png",x_des=np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_]))
-    plotting_history_pos(t,hist_,img_name=params.output_path+"/robotIRB120_PDg_pos.png",x_des=np.array([list(_move_r_des(t_i)) for t_i in t]))
+    plotting_history_energy(t,hist_,img_name=params.output_path+"/robotIRB120_ctrl_energy.png")
+    plotting_history_joints(t,hist_,img_name=params.output_path+"/robotIRB120_ctrl_q.png")
+    if params.flag_moving:
+        plotting_history_pos(t,hist_,img_name=params.output_path+"/robotIRB120_ctrl_pos.png",x_des=np.array([list(_move_r_des(t_i)) for t_i in t]))
+    else:
+        plotting_history_pos(t,hist_,img_name=params.output_path+"/robotIRB120_ctrl_pos.png",x_des=np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_]))
 
     print("# --- Finish Program --- #")
     sys.exit()
