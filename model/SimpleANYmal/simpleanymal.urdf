@@ -63,33 +63,48 @@
 
   </link>
 
-  <!-- ============================================================
-       PLANAR BASE JOINT
-       
-       Represents:
-         x_B
-         z_B
-         theta_B
-       
-       The motion plane is X-Z.
-       Plane normal is Y.
-       ============================================================ -->
-  <joint name="base_planar_joint" type="planar">
-    <parent link="world"/>
-    <child link="base"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-  </joint>
+
+    <!--============================================================
+        FLOATING BASE: X, Z TRANSLATION + Y ROTATION
+        Represents:
+          x_B
+          z_B
+          theta_B
+        ============================================================ -->
+    <!-- Intermediate links for floating base -->
+    <link name="base_x_link"/>
+    <link name="base_z_link"/>
+
+    <!-- Translation along X -->
+    <joint name="base_x_joint" type="prismatic">
+        <parent link="world"/>
+        <child link="base_x_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-5.0" upper="5.0" effort="1000" velocity="5.0"/>
+    </joint>
+
+    <!-- Translation along Z -->
+    <joint name="base_z_joint" type="prismatic">
+        <parent link="base_x_link"/>
+        <child link="base_z_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-5.0" upper="5.0" effort="1000" velocity="5.0"/>
+    </joint>
+
+    <!-- Rotation around Y -->
+    <joint name="base_pitch_joint" type="revolute">
+        <parent link="base_z_link"/>
+        <child link="base"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-3.14159265" upper="3.14159265" effort="1000" velocity="10.0"/>
+    </joint>
 
   <!-- ============================================================
        HIND / REAR THIGH
-       
-       MATLAB names:
-         HT
-       
-       Parameter names:
-         RT
-       
+              
        l_RT = 0.30
        r_RT = 0.015
        m_RT = 0.50
@@ -114,6 +129,16 @@
       </material>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color">
+            <color rgba="0.0 0.0 0.0 1.0"/>
+        </material>
+    </visual>
+
     <collision>
       <origin xyz="0 0 0.15" rpy="0 0 0"/>
       <geometry>
@@ -128,24 +153,15 @@
 
     <parent link="base"/>
     <child link="hind_thigh"/>
-
-    <origin xyz="-0.30 0 -0.05" rpy="0 0 0"/>
-
+    <origin xyz="-0.30 0 -0.05" rpy="0 3.141592 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
 
   </joint>
 
   <!-- ============================================================
        HIND / REAR SHANK
-       
-       MATLAB name:
-         HS
-       
-       Parameter name:
-         RS
-       
+              
        l_RS = 0.30
        r_RS = 0.015
        m_RS = 0.50
@@ -167,6 +183,14 @@
       <material name="leg_color"/>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color"/>
+    </visual>
+
     <collision>
       <origin xyz="0 0 0.15" rpy="0 0 0"/>
       <geometry>
@@ -181,11 +205,8 @@
 
     <parent link="hind_thigh"/>
     <child link="hind_shank"/>
-
-    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
-
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
 
   </joint>
@@ -232,7 +253,7 @@
 
     <parent link="hind_shank"/>
     <child link="hind_foot"/>
-    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
 
   </joint>
 
@@ -261,6 +282,14 @@
       <material name="leg_color"/>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color"/>
+    </visual>
+
     <collision>
       <origin xyz="0 0 0.15" rpy="0 0 0"/>
       <geometry>
@@ -275,11 +304,8 @@
 
     <parent link="base"/>
     <child link="front_thigh"/>
-
-    <origin xyz="0.30 0 -0.05" rpy="0 0 0"/>
-
+    <origin xyz="0.30 0 -0.05" rpy="0 3.141592 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
 
   </joint>
@@ -308,6 +334,14 @@
       <material name="leg_color"/>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color"/>
+    </visual>
+
     <collision>
       <origin xyz="0 0 0.15" rpy="0 0 0"/>
       <geometry>
@@ -322,11 +356,8 @@
 
     <parent link="front_thigh"/>
     <child link="front_shank"/>
-
-    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
-
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
 
   </joint>
@@ -366,7 +397,7 @@
 
     <parent link="front_shank"/>
     <child link="front_foot"/>
-    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
 
   </joint>
 
@@ -400,6 +431,14 @@
       </material>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color"/>
+    </visual>
+
     <collision>
       <origin xyz="0 0 -0.15" rpy="0 0 0"/>
       <geometry>
@@ -409,16 +448,12 @@
 
   </link>
 
-
   <joint name="shoulder" type="revolute">
 
     <parent link="base"/>
     <child link="upper_arm"/>
-
-    <origin xyz="0.15 0 0.05" rpy="0 0 0"/>
-
+    <origin xyz="0.15 0 0.05" rpy="0 3.14159265 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
 
   </joint>
@@ -446,6 +481,14 @@
       <material name="arm_color"/>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color"/>
+    </visual>
+
     <collision>
       <origin xyz="0 0 -0.15" rpy="0 0 0"/>
       <geometry>
@@ -460,15 +503,13 @@
 
     <parent link="upper_arm"/>
     <child link="lower_arm"/>
-
-    <origin xyz="0 0 0.30" rpy="0 0 0"/>
-
+    <origin xyz="0 0 -0.30" rpy="0 1.570796 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
+
   </joint>
 
-
+  
   <!-- ============================================================
        HAND
        
@@ -493,6 +534,14 @@
       <material name="arm_color"/>
     </visual>
 
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <sphere radius="0.02"/>
+        </geometry>
+        <material name="joint_color"/>
+    </visual>
+
     <collision>
       <origin xyz="0 0 -0.075" rpy="0 0 0"/>
       <geometry>
@@ -506,11 +555,8 @@
   <joint name="wrist" type="revolute">
     <parent link="lower_arm"/>
     <child link="hand"/>
-
-    <origin xyz="0 0 0.30" rpy="0 0 0"/>
-
+    <origin xyz="0 0 -0.30" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
-
     <limit effort="100" velocity="10" lower="-3.14159265" upper="3.14159265"/>
   </joint>
 
@@ -537,7 +583,7 @@
         <sphere radius="0.020"/>
       </geometry>
       <material name="ee_color">
-        <color rgba="0.80 0.60 0.60 1.0"/>
+        <color rgba="0.90 0.10 0.10 1.0"/>
       </material>
     </visual>
 
@@ -554,7 +600,7 @@
   <joint name="end_effector_joint" type="fixed">
     <parent link="hand"/>
     <child link="end_effector"/>
-    <origin xyz="0 0 0.15" rpy="0 0 0"/>
+    <origin xyz="0 0 -0.15" rpy="0 0 0"/>
   </joint>
 
 </robot>
