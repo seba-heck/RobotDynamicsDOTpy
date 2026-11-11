@@ -19,7 +19,7 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         file = repo_root+"/model/IRB120/irb120.urdf"
     else:
-        file = sys.argv[2]
+        file = sys.argv[1]
 
     print("Showing with yourdfpy: ", file)
     show_robot(file)
