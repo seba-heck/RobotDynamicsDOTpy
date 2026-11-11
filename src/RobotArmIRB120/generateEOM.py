@@ -23,9 +23,9 @@ import numpy as np
 import sympy as sp
 from RobotArmIRB120 import spy
 
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-
-path_func_ = lambda f: repo_root+f"/bin/func_{f}.bin"
+repo_root  = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+path_dir_  = repo_root+f"/bin"
+path_func_ = lambda f: path_dir_+f"/func_{f}.bin"
 
 
 class IRB120:
@@ -321,13 +321,16 @@ def load_EOM():
 if __name__ == "__main__":
     eom = generate_eom()
 
+    if not os.path.exists(path_dir_):
+        os.mkdir(path_dir_)
+
     dill.settings['recurse'] = True
     for func_ in eom.keys():
         path_ = path_func_(func_)
         dill.dump(eom[func_], open(path_, "wb"))
         print(f"Saved: {func_}")
 
-    M = dill.load(open(repo_root+"/bin/M_func.bin", "rb"))
+    M = dill.load(open(path_func_("M"), "rb"))
 
     phi,dphi = generalized_coords()
 

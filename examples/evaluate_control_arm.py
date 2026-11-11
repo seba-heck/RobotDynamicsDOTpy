@@ -23,6 +23,7 @@ Author: Sebastian Heckers
 Based on: Exercise 2b from 'Robot Dynamics, ETHZ
 """
 import os
+from Common import *
 import RobotArmIRB120 as irb
 import numpy as np
 import sympy as sp
@@ -34,8 +35,8 @@ from time import perf_counter
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 ## CONFIGURATION PARAMETERS
-N_steps = 1000
-t_s = 0.01
+N_steps = 10000
+t_s = 0.001
 t_save = 0.01
 t_end = 10.0
 tau = np.zeros((6,1))
@@ -43,8 +44,8 @@ f_ext = np.zeros((6,1))
 friction = 0.1*np.ones(6)
 dq_0 = np.zeros(6)
 q_0 = np.zeros(6)
-method = "rk4"
-controller = "EOM"  # PDg INV OPS EOM
+method = "adaptive_rk4"
+controller = "PDg"  # PDg INV OPS EOM
 flag_friction = False
 flag_gravity = True
 flag_moving = True
@@ -62,7 +63,7 @@ print(f"    number of steps = {N_steps}")
 print(f"          time step = {t_s} s")
 print(f"         time total = {N_steps*t_s} s")
 print(f"           time end = {t_end} s")
-print(f"          force_ext = {[i[0] for i in f_ext]}")
+print(f"          force_ext = {[float(i[0]) for i in f_ext]}")
 print(f"           friction = {friction} (enabled {flag_friction})")
 print(f"            gravity = enabled {flag_gravity}")
 print(f"             moving = enabled {flag_moving}")
@@ -188,64 +189,69 @@ np.savetxt(repo_root+file_name, data, header=header)
 print(f"Saved history: {file_name}")
 
 ## PLOTTING
-colors = ['tab:blue', 'tab:orange', 'tab:green']
-labels = ['H', 'E_kin', 'E_pot']
 t = [h for _,_,_,_,_,_,h in hist_]
+plotting_history_energy(t,hist_,img_name=f"/bin/robotIRB120_control_{controller}_energy.png")
+plotting_history_joints(t,hist_,img_name=f"/bin/robotIRB120_control_{controller}_q.png")
+plotting_history_pos(t,hist_,img_name=f"/bin/robotIRB120_control_{controller}_pos.png",x_des=np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_]))
 
-# Energy
-fig, ax = plt.subplots()
+# colors = ['tab:blue', 'tab:orange', 'tab:green']
+# labels = ['H', 'E_kin', 'E_pot']
+# t = [h for _,_,_,_,_,_,h in hist_]
 
-ax.plot(t, [h for _,_,_,h,_,_,_ in hist_], color='tab:red', label='H')
-ax.plot(t, [h for _,_,_,_,h,_,_ in hist_], color='tab:blue', label='E_kin')
-ax.plot(t, [h for _,_,_,_,_,h,_ in hist_], color='tab:green', label='E_pot')
+# # Energy
+# fig, ax = plt.subplots()
 
-ax.set_title("Energy Diagram")
-ax.set_xlabel("Time [s]")
-ax.set_ylabel("Energy")
-ax.grid(True)
-ax.legend()
+# ax.plot(t, [h for _,_,_,h,_,_,_ in hist_], color='tab:red', label='H')
+# ax.plot(t, [h for _,_,_,_,h,_,_ in hist_], color='tab:blue', label='E_kin')
+# ax.plot(t, [h for _,_,_,_,_,h,_ in hist_], color='tab:green', label='E_pot')
 
-img_name = f"/bin/robotIRB120_control_{controller}_energy.png"
-plt.savefig(repo_root+img_name)
-print(f"Saved plot: {img_name}")
+# ax.set_title("Energy Diagram")
+# ax.set_xlabel("Time [s]")
+# ax.set_ylabel("Energy")
+# ax.grid(True)
+# ax.legend()
 
-# Joint Angle
-fig, ax = plt.subplots()
+# img_name = f"/bin/robotIRB120_control_{controller}_energy.png"
+# plt.savefig(repo_root+img_name)
+# print(f"Saved plot: {img_name}")
 
-ax.plot(t, [list(h) for h,_,_,_,_,_,_ in hist_], label=[f"q_{i+1}" for i in range(6)])
+# # Joint Angle
+# fig, ax = plt.subplots()
 
-ax.set_title("Joint Angle Diagram")
-ax.set_xlabel("Time [s]")
-ax.set_ylabel("Angle [rad]")
-ax.grid(True)
-ax.legend()
+# ax.plot(t, [list(h) for h,_,_,_,_,_,_ in hist_], label=[f"q_{i+1}" for i in range(6)])
 
-img_name = f"/bin/robotIRB120_control_{controller}_q.png"
-plt.savefig(repo_root+img_name)
-print(f"Saved plot: {img_name}")
+# ax.set_title("Joint Angle Diagram")
+# ax.set_xlabel("Time [s]")
+# ax.set_ylabel("Angle [rad]")
+# ax.grid(True)
+# ax.legend()
 
-# Position
-fig, ax = plt.subplots()
+# img_name = f"/bin/robotIRB120_control_{controller}_q.png"
+# plt.savefig(repo_root+img_name)
+# print(f"Saved plot: {img_name}")
 
-x_bot = np.array([list(irb.jointToPosition(h)) for h,_,_,_,_,_,_ in hist_])
-if controller == "PDg":
-    x_des = np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_])
-else: # controller == "PD"
-    x_des = np.array([list(_move_r_des(t_i)) for t_i in t])
-    # x_des = np.array([list(r_des) for h,_,_,_,_,_,_ in hist_])
-for i in range(3):
-    ax.plot(t, x_bot[:,i], label=f"x_{i+1}", color=colors[i])
-    ax.plot(t, x_des[:,i], '--', label=f"x_des_{i+1}", color=colors[i])
+# # Position
+# fig, ax = plt.subplots()
 
-ax.set_title("End-effector Position Diagram")
-ax.set_xlabel("Time [s]")
-ax.set_ylabel("Position [m]")
-ax.grid(True)
-ax.legend()
+# x_bot = np.array([list(irb.jointToPosition(h)) for h,_,_,_,_,_,_ in hist_])
+# if controller == "PDg":
+#     x_des = np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_])
+# else: # controller == "PD"
+#     x_des = np.array([list(_move_r_des(t_i)) for t_i in t])
+#     # x_des = np.array([list(r_des) for h,_,_,_,_,_,_ in hist_])
+# for i in range(3):
+#     ax.plot(t, x_bot[:,i], label=f"x_{i+1}", color=colors[i])
+#     ax.plot(t, x_des[:,i], '--', label=f"x_des_{i+1}", color=colors[i])
 
-img_name = f"/bin/robotIRB120_control_{controller}_pos.png"
-plt.savefig(repo_root+img_name)
-print(f"Saved plot: {img_name}")
+# ax.set_title("End-effector Position Diagram")
+# ax.set_xlabel("Time [s]")
+# ax.set_ylabel("Position [m]")
+# ax.grid(True)
+# ax.legend()
+
+# img_name = f"/bin/robotIRB120_control_{controller}_pos.png"
+# plt.savefig(repo_root+img_name)
+# print(f"Saved plot: {img_name}")
 
 ## Visualisation of Robot
 irb.viz_hist([h for h,_,_,_,_,_,_ in hist_], dt=t_s)
