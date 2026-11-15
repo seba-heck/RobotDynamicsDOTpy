@@ -22,9 +22,9 @@ def dynamics(model, data, q, dq, tau, F_EE, kp = 10.0, I_p_Ff0 = None, I_p_Hf0 =
     b_i = np.asarray(get_b(model,data,q,dq), dtype=float).reshape(-1, 1)
     g_i = np.asarray(get_g(model,data,q), dtype=float).reshape(-1, 1)
 
-    I_J_Ff,I_J_Hf,I_J_EE = get_J(model,data,q)
-    I_Jd_Ff,I_Jd_Hf = get_dJ(model,data,q,dq)
-    I_T_Ff,I_T_Hf,I_T_EE = get_T(model,data,q,dq)
+    _,I_J_Ff,I_J_Hf,I_J_EE = get_J(model,data,q)
+    _,I_Jd_Ff,I_Jd_Hf,_ = get_dJ(model,data,q,dq)
+    _,I_T_Ff,I_T_Hf,I_T_EE = get_T(model,data,q,dq)
 
     # Extract x and z coordinates
     I_p_Ff = I_T_Ff[[0, 2], 3]

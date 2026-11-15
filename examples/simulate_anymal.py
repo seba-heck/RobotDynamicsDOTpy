@@ -23,6 +23,7 @@ Author: Sebastian Heckers
 Based on: Exercise 2b from 'Robot Dynamics, ETHZ
 """
 import os
+import CommonRobotics as cr
 import LeggedRobotDog as lrd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -31,20 +32,26 @@ from time import perf_counter
 import pinocchio
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-urdf_filename = repo_root + "/model/SimpleANYmal/simpleanymal.urdf"
+urdf_filename = "/model/SimpleANYmal/simpleanymal.urdf"
 
 nq = 10
 
 ## CONFIGURATION PARAMETERS
-N_steps = 10000
-t_s = 0.001
+N_steps = 1000
+t_s = 0.005
 t_save = 0.01
 t_end = 10.0
 tau = np.zeros((6,1))
 f_ext = np.zeros((6,1))
 friction = 0.1*np.ones(6)
 dq_0 = np.zeros((nq,1))
-q_0 = np.zeros((nq,1))
+# q_0 = np.zeros((nq,1))
+q_0 = np.array([
+    0.0, 0.60, 0.0,
+    0.9, -1.5,
+    0.9, -1.5,
+    0.5, -0.8, 0.6
+]).reshape((nq,1))
 method = "rk4"
 controller = "EOM"  # PDg INV OPS EOM
 flag_friction = False
@@ -52,7 +59,14 @@ flag_gravity = True
 flag_moving = True
 flag_startpos = False
 
-# goals
+# GOALS
+def get_base_motion_trajectory(t, offset=[0,0.5,0], amplitude = 0.1, freq = 1.0):
+    """Generates reference trajectories for the base of the robot."""
+    q_b = amplitude * np.array([np.sin(2*np.pi*freq*t), np.cos(2*np.pi*freq*t), 0]).reshape((3,1)) + np.array(offset).reshape((3,1))
+    # dq_b = amplitude * freq * np.array([np.cos(2*np.pi*freq*t), -np.sin(2*np.pi*freq*t), 0]).reshape((3,1))
+    dq_b = amplitude * 2*np.pi*freq * np.array([np.cos(2*np.pi*freq*t), -np.sin(2*np.pi*freq*t), 0]).reshape((3,1))
+    return q_b,dq_b
+
 # _move_r_des = lambda t_i:( irb.jointToPosition(q_0) + np.array([0, 0.2*np.sin(2*np.pi*t_i*0.2), 0.2*np.cos(2*np.pi*t_i*0.2)]) ).reshape((3,1))
 # q_des = np.ones(6)
 # r_des = _move_r_des(0.0) if flag_moving else irb.jointToPosition(q_0).reshape((3,1)) + np.ones((3,1))*0.1
@@ -80,8 +94,8 @@ print(f"  controller method = {controller}\n")
 ## LOADING KINEMATICS / EOM
 print(f"[START] Loading robot dynamics, EoM ...", end=" ", flush=True)
 # Load the urdf model
-model = pinocchio.buildModelFromUrdf(urdf_filename)
-print(" Model name: " + model.name)
+model = pinocchio.buildModelFromUrdf(repo_root+urdf_filename)
+print("\n Model name: " + model.name)
 
 # Create data required by the algorithms
 data = model.createData()
@@ -107,18 +121,13 @@ step = lrd.Integrators_Dynamics[method]
 def calc_wall(model,data,q,dq,x_wall,K=1e3):
     D = 2*np.sqrt(K)
 
-    I_J_Ff,I_J_Hf,I_J_EE = lrd.get_J(model,data,q)
-    I_T_Ff,I_T_Hf,I_T_EE = lrd.get_T(model,data,q,dq)
+    _,_,_,I_J_EE = lrd.get_J(model,data,q)
+    _,_,_,I_T_EE = lrd.get_T(model,data,q,dq)
 
     x_EE = I_T_EE[0,3]
     v_EE = I_J_EE[0,:]@dq
 
     if x_EE > x_wall:
-        # print(f"v_EE: {v_EE.shape}")
-        # print(f"dq: {dq.shape}")
-        # print(f"f_EE: {(K*(x_wall - x_EE) - D*v_EE).shape}")
-        # print(f"f_EE: {(K*(x_wall - x_EE)).shape}")
-        # print(f"f_EE: {(x_wall - x_EE).shape}")
         f_EE = np.array([K*(x_wall - x_EE) - (D*v_EE)[0], 0.0, 0.0]).reshape((3,1))
     else:
         f_EE = np.zeros((3,1))
@@ -132,7 +141,6 @@ S = np.hstack([
     np.eye(7)
 ])
 
-
 ## SIMULATION LOOP
 q_i = q_0 #irb.inverseKinematics(r_des, irb.jointToRotMat(q_0), q_0, 1e-6)[0] if flag_startpos else q_0
 dq_i = dq_0
@@ -143,20 +151,30 @@ hist_ = [(q_i, dq_i, np.zeros(nq), lrd.calc_H(model,data,q_0,dq_0), lrd.calc_E_k
 pbar = tqdm(total=N_steps)
 t_start = perf_counter()
 for i in range(N_steps):
+    # data = model.createData()
+
     g_i = np.asarray(lrd.get_g(model,data,q_i), dtype=float).reshape(-1, 1)
 
     F_EE = calc_wall(model,data,q_i,dq_i,0.8)
 
     ddq,F_C = lrd.dynamics(model, data, q_i, dq_i, tau, F_EE, kp = 10.0, I_p_Ff0 = None, I_p_Hf0 = None)
 
+    # print(f"{i} dynamics done")
+
     q_i = q_i + dq_i*t_s
     dq_i = dq_i + ddq*t_s
 
     # print(ddq.shape, dq_i.shape, q_i.shape)
+    q_i = np.array(q_i, dtype=np.float64, copy=True)
+    dq_i = np.array(dq_i, dtype=np.float64, copy=True)
 
-    tau = lrd.control_pd_g(q_i,dq_i,g_i,S)
+    # tau = lrd.control_pd_g(q_i,dq_i,g_i,S)
+    tau = lrd.control_floating_base(model,data, q_i, dq_i, get_base_motion_trajectory, t_i)
+    # tau = lrd.control_hybrid_force(model,data, q_i, dq_i, get_base_motion_trajectory, t_i)
 
+    # print(f"{i} control done")
     # print(f"tau: {tau.shape} {tau}")
+    tau = np.array(tau, dtype=np.float64, copy=True)
 
     t_i += t_s
 
@@ -183,6 +201,8 @@ for i in range(N_steps):
 t_elapsed = perf_counter() - t_start
 pbar.close()
 
+print(q_i)
+
 print(f"TIMING:\n Simulation time: {t_elapsed:.3f} s\n Average time/step: {t_elapsed / it_final * 1000:.3f} ms")
 
 dH = hist_[-1][3] - hist_[0][3]
@@ -190,13 +210,13 @@ print(f"RESULT: Energy H difference:\n total diff.: {dH:.3f}\n rel. diff.: {100*
 print(f"RESULT: time\n final time: {t_i}\n number of steps: {it_final}")
 
 ## SAVE HISTORY
-data = np.array([
+data_hist = np.array([
     np.concatenate([q.flatten(), dq.flatten(), ddq.flatten(), [H, E_kin, E_pot, t]])
     for q, dq, ddq, H, E_kin, E_pot, t in hist_
 ])
 header = "q1 q2 q3 q4 q5 q6 dq1 dq2 dq3 dq4 dq5 dq6 ddq1 ddq2 ddq3 ddq4 ddq5 ddq6 H E_kin E_pot t"
 file_name = f"/bin/hist_SimpleANYmal_control_{controller}.txt"
-np.savetxt(repo_root+file_name, data, header=header)
+np.savetxt(repo_root+file_name, data_hist, header=header)
 print(f"Saved history: {file_name}")
 
 ## PLOTTING
@@ -236,28 +256,24 @@ img_name = f"/bin/SimpleANYmal_control_{controller}_q.png"
 plt.savefig(repo_root+img_name)
 print(f"Saved plot: {img_name}")
 
-# # Position
-# fig, ax = plt.subplots()
+# Position
+plt_data = np.array([get_base_motion_trajectory(t_/100) for t_ in range(0,100)])
+plt_p_EE = np.array([q_[:3] for q_,_,_,_,_,_,_ in hist_])
+plt_w_EE = np.array([dq_[:3] for _,dq_,_,_,_,_,_ in hist_])
+fig, ax = plt.subplots()
+ax.plot(plt_data[:,0,0,0], plt_data[:,0,1,0], '--', color='tab:blue', label=f"base position reference")
+ax.plot(plt_data[:,1,0,0], plt_data[:,1,1,0], '--', color='tab:red',  label=f"base velocity reference")
+ax.plot(plt_p_EE[:,0], plt_p_EE[:,1], color='tab:blue', label=f"base position computed")
+ax.plot(plt_w_EE[:,0], plt_w_EE[:,1], color='tab:red',  label=f"base velocity computed")
+ax.set_title("Base Position Diagram")
+ax.set_xlabel("X [m]")
+ax.set_ylabel("Y [m]")
+ax.grid(True)
+ax.plot()
+img_name = f"/bin/SimpleANYmal_control_position.png"
+fig.legend()
+plt.savefig(repo_root+img_name)
+print(f"Saved plot: {img_name}")
 
-# x_bot = np.array([list(irb.jointToPosition(h)) for h,_,_,_,_,_,_ in hist_])
-# if controller == "PDg":
-#     x_des = np.array([list(irb.jointToPosition(q_des)) for h,_,_,_,_,_,_ in hist_])
-# else: # controller == "PD"
-#     x_des = np.array([list(_move_r_des(t_i)) for t_i in t])
-#     # x_des = np.array([list(r_des) for h,_,_,_,_,_,_ in hist_])
-# for i in range(3):
-#     ax.plot(t, x_bot[:,i], label=f"x_{i+1}", color=colors[i])
-#     ax.plot(t, x_des[:,i], '--', label=f"x_des_{i+1}", color=colors[i])
-
-# ax.set_title("End-effector Position Diagram")
-# ax.set_xlabel("Time [s]")
-# ax.set_ylabel("Position [m]")
-# ax.grid(True)
-# ax.legend()
-
-# img_name = f"/bin/SimpleANYmal_control_{controller}_pos.png"
-# plt.savefig(repo_root+img_name)
-# print(f"Saved plot: {img_name}")
-
-# ## Visualisation of Robot
-# irb.viz_hist([h for h,_,_,_,_,_,_ in hist_], dt=t_s)
+## Visualisation of Robot
+cr.viz_hist([h for h,_,_,_,_,_,_ in hist_], urdf_filename, dt=t_s)

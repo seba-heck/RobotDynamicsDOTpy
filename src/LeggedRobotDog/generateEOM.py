@@ -10,14 +10,14 @@ def _get_planar_jacobian(model,data,frame_id,planar_rows=PLANAR_ROWS):
         model, data, frame_id,
         pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
     )
-    return J[planar_rows, :]
+    return J[planar_rows, :].copy()
 
 def _get_planar_jacobian_derivative(model,data,frame_id,planar_rows=PLANAR_ROWS):
     Jdot = pin.getFrameJacobianTimeVariation(
         model, data, frame_id,
         pin.ReferenceFrame.LOCAL_WORLD_ALIGNED
     )
-    return Jdot[planar_rows, :]
+    return Jdot[planar_rows, :].copy()
 
 
 def get_M(model,data,q):
@@ -37,6 +37,9 @@ def get_g(model,data,q):
     return g
 
 def get_J(model,data,q):
+    q = np.asarray(q, dtype=float).reshape(-1)
+
+    base_id = model.getFrameId("base")
     front_foot_id = model.getFrameId("front_foot")
     hind_foot_id = model.getFrameId("hind_foot")
     ee_id = model.getFrameId("end_effector")
@@ -46,13 +49,18 @@ def get_J(model,data,q):
     pin.updateFramePlacements(model, data)
 
     # Jacobians
+    I_J_Ba = _get_planar_jacobian(model,data,base_id)
     I_J_Ff = _get_planar_jacobian(model,data,front_foot_id)
     I_J_Hf = _get_planar_jacobian(model,data,hind_foot_id)
     I_J_EE = _get_planar_jacobian(model,data,ee_id)
 
-    return I_J_Ff,I_J_Hf,I_J_EE
+    return I_J_Ba,I_J_Ff,I_J_Hf,I_J_EE
 
 def get_dJ(model,data,q,dq):
+    q = np.asarray(q, dtype=float).reshape(-1)
+    dq = np.asarray(dq, dtype=float).reshape(-1)
+
+    base_id = model.getFrameId("base")
     front_foot_id = model.getFrameId("front_foot")
     hind_foot_id = model.getFrameId("hind_foot")
     ee_id = model.getFrameId("end_effector")
@@ -62,12 +70,18 @@ def get_dJ(model,data,q,dq):
     pin.updateFramePlacements(model, data)
 
     # Jacobian derivatives
+    I_Jd_Ba = _get_planar_jacobian_derivative(model,data,base_id)
     I_Jd_Ff = _get_planar_jacobian_derivative(model,data,front_foot_id)
     I_Jd_Hf = _get_planar_jacobian_derivative(model,data,hind_foot_id)
+    I_Jd_EE = _get_planar_jacobian_derivative(model,data,ee_id)
 
-    return I_Jd_Ff,I_Jd_Hf
+    return I_Jd_Ba,I_Jd_Ff,I_Jd_Hf,I_Jd_EE
 
 def get_T(model,data,q,dq):
+    q = np.asarray(q, dtype=float).reshape(-1)
+    dq = np.asarray(dq, dtype=float).reshape(-1)
+
+    base_id = model.getFrameId("base")
     front_foot_id = model.getFrameId("front_foot")
     hind_foot_id = model.getFrameId("hind_foot")
     ee_id = model.getFrameId("end_effector")
@@ -77,11 +91,12 @@ def get_T(model,data,q,dq):
     pin.updateFramePlacements(model, data)
 
     # World transformations
-    I_T_Ff = data.oMf[front_foot_id].homogeneous
-    I_T_Hf = data.oMf[hind_foot_id].homogeneous
-    I_T_EE = data.oMf[ee_id].homogeneous
+    I_T_Ba = data.oMf[base_id].homogeneous.copy()
+    I_T_Ff = data.oMf[front_foot_id].homogeneous.copy()
+    I_T_Hf = data.oMf[hind_foot_id].homogeneous.copy()
+    I_T_EE = data.oMf[ee_id].homogeneous.copy()
 
-    return I_T_Ff,I_T_Hf,I_T_EE
+    return I_T_Ba,I_T_Ff,I_T_Hf,I_T_EE
 
 
 def calc_E_pot(model,data,q):
