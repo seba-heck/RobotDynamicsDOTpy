@@ -47,6 +47,7 @@ class IRB120:
             sp.diag(0.0004, 0.0008, 0.0009),
             sp.diag(0.002, 0.002, 0.003)
         ]
+        self.urdf_filename = "/model/IRB120/irb120.urdf"
 
 def dAdt(A, q, dq):
     """Calculate Jacobian matrix."""

@@ -23,6 +23,7 @@ Author: Sebastian Heckers
 Based on: Exercise 2b from 'Robot Dynamics, ETHZ
 """
 import os
+import CommonRobotics as cr
 import RobotArmIRB120 as irb
 import numpy as np
 import sympy as sp
@@ -93,7 +94,7 @@ H,E_kin,E_pot = irb.make_energies(eom)
 print(f"[DONE]")
 
 ## PREPARE SIMULATION STEP
-step = irb.Integrators_Dynamics[method]
+step = cr.ALL_INTEGRATOR_STEPS[method]
 
 def reaction_collision_model(q,dq,Jpe=I_Jpe,x_wall=0.4,alpha=500.0):
     r_ = irb.jointToPosition(q)[0] - x_wall #+ 0.05
@@ -145,7 +146,7 @@ for i in range(N_steps):
             "reaction_collision_model": reaction_collision_model}
 
     dynamics = irb.make_dynamics(f_ext, tau, eom, Jt, I_dJe, cont, flag_friction=flag_friction, friction=friction, flag_gravity=flag_gravity)
-    q_i,dq_i,ddq,t_s = step(q_i,dq_i,t_s,dynamics)
+    q_i,dq_i,ddq,t_s = step(q_i,dq_i,t_s,dynamics, nq=6)
     t_i += t_s
 
     # save current state
@@ -248,4 +249,4 @@ plt.savefig(repo_root+img_name)
 print(f"Saved plot: {img_name}")
 
 ## Visualisation of Robot
-irb.viz_hist([h for h,_,_,_,_,_,_ in hist_], dt=t_s)
+cr.viz_hist([h for h,_,_,_,_,_,_ in hist_], bot.urdf_filename, dt=t_s)
