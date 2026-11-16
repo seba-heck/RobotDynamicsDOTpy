@@ -38,26 +38,20 @@ nq = 10
 
 ## CONFIGURATION PARAMETERS
 N_steps = 1000
-t_s = 0.005
+t_s = 0.001
 t_save = 0.01
 t_end = 10.0
-tau = np.zeros((6,1))
-f_ext = np.zeros((6,1))
-friction = 0.1*np.ones(6)
+
+tau = np.zeros((7,1))
 dq_0 = np.zeros((nq,1))
-# q_0 = np.zeros((nq,1))
 q_0 = np.array([
-    0.0, 0.60, 0.0,
-    0.9, -1.5,
-    0.9, -1.5,
-    0.5, -0.8, 0.6
-]).reshape((nq,1))
+        0.0, 0.60, 0.0,
+        0.9, -1.5,
+        0.9, -1.5,
+        0.5, -0.8, 0.6
+    ]).reshape((nq,1))
 method = "rk4"
-controller = "EOM"  # PDg INV OPS EOM
-flag_friction = False
-flag_gravity = True
-flag_moving = True
-flag_startpos = False
+controller = "HyF"  # PDg FlB HyF
 
 # GOALS
 def get_base_motion_trajectory(t, offset=[0,0.5,0], amplitude = 0.1, freq = 1.0):
@@ -67,22 +61,11 @@ def get_base_motion_trajectory(t, offset=[0,0.5,0], amplitude = 0.1, freq = 1.0)
     dq_b = amplitude * 2*np.pi*freq * np.array([np.cos(2*np.pi*freq*t), -np.sin(2*np.pi*freq*t), 0]).reshape((3,1))
     return q_b,dq_b
 
-# _move_r_des = lambda t_i:( irb.jointToPosition(q_0) + np.array([0, 0.2*np.sin(2*np.pi*t_i*0.2), 0.2*np.cos(2*np.pi*t_i*0.2)]) ).reshape((3,1))
-# q_des = np.ones(6)
-# r_des = _move_r_des(0.0) if flag_moving else irb.jointToPosition(q_0).reshape((3,1)) + np.ones((3,1))*0.1
-# eul_des = irb.rotMatToEulAngXYZ(irb.jointToRotMat(q_0)).reshape((3,1))
-# I_F_Ex = 10
-
 print(f"EXAMPLE OF CONTROL FOR ABB ROBOT ARM\n")
 print(f"    number of steps = {N_steps}")
 print(f"          time step = {t_s} s")
 print(f"         time total = {N_steps*t_s} s")
 print(f"           time end = {t_end} s")
-print(f"          force_ext = {[i[0] for i in f_ext]}")
-print(f"           friction = {friction} (enabled {flag_friction})")
-print(f"            gravity = enabled {flag_gravity}")
-print(f"             moving = enabled {flag_moving}")
-print(f"      set start pos = enabled {flag_startpos}")
 print(f" integration method = {method}")
 print(f"  controller method = {controller}\n")
 
@@ -100,29 +83,14 @@ print("\n Model name: " + model.name)
 # Create data required by the algorithms
 data = model.createData()
 
-# bot = irb.IRB120()
-# phi,dphi = irb.generalized_coords()
-# kin = irb.generate_kinematics_sp(phi)
-# jac = irb.generate_jacobian_sp(phi,dphi,kin,bot)
-
-# J_ = jac["I_Je"]
-# Jt = sp.lambdify(phi, J_, "numpy")
-# I_dJe = sp.lambdify((*phi,*dphi), jac["I_dJe"], "numpy")
-# I_Jpe = sp.lambdify(phi, jac["I_Jpe"], "numpy")
-# eom = irb.load_EOM()
-
-# H,E_kin,E_pot = irb.make_energies(eom)
-
 print(f"[DONE]")
 
 ## PREPARE SIMULATION STEP
-step = lrd.Integrators_Dynamics[method]
+step = cr.ALL_INTEGRATOR_STEPS[method]
+control_func = lrd.ALL_CONTROL_FUNCS[controller]
 
-def calc_wall(model,data,q,dq,x_wall,K=1e3):
+def calc_wall(I_T_EE,I_J_EE,dq,x_wall,K=1e3):
     D = 2*np.sqrt(K)
-
-    _,_,_,I_J_EE = lrd.get_J(model,data,q)
-    _,_,_,I_T_EE = lrd.get_T(model,data,q,dq)
 
     x_EE = I_T_EE[0,3]
     v_EE = I_J_EE[0,:]@dq
@@ -134,47 +102,59 @@ def calc_wall(model,data,q,dq,x_wall,K=1e3):
 
     return f_EE
 
-tau = np.zeros((7,1))
-# Selection matrix: 3 unactuated base DOFs, 7 actuated joints
-S = np.hstack([
-    np.zeros((7, 3)),
-    np.eye(7)
-])
-
-## SIMULATION LOOP
-q_i = q_0 #irb.inverseKinematics(r_des, irb.jointToRotMat(q_0), q_0, 1e-6)[0] if flag_startpos else q_0
+q_i = q_0
 dq_i = dq_0
-t_i = 0
+t_i = 0.0
 t_next_save = t_save
 it_final = N_steps
 hist_ = [(q_i, dq_i, np.zeros(nq), lrd.calc_H(model,data,q_0,dq_0), lrd.calc_E_kin(model,data,q_0,dq_0), lrd.calc_E_pot(model,data,q_0), t_i )]
+
+## SIMULATION LOOP
 pbar = tqdm(total=N_steps)
 t_start = perf_counter()
 for i in range(N_steps):
-    # data = model.createData()
 
-    g_i = np.asarray(lrd.get_g(model,data,q_i), dtype=float).reshape(-1, 1)
+    def dyn(q_,dq_):
+        # Evaluate robot dynamics
+        M_i = np.asarray(lrd.get_M(model,data,q_i), dtype=float)
+        b_i = np.asarray(lrd.get_b(model,data,q_i,dq_i), dtype=float).reshape(-1, 1)
+        g_i = np.asarray(lrd.get_g(model,data,q_i), dtype=float).reshape(-1, 1)
 
-    F_EE = calc_wall(model,data,q_i,dq_i,0.8)
+        I_J_Ba, I_J_Ff, I_J_Hf, I_J_EE  = lrd.get_J(model,data,q_i)
+        I_Jd_Ba,I_Jd_Ff,I_Jd_Hf,I_Jd_EE = lrd.get_dJ(model,data,q_i,dq_i)
+        I_T_Ba, I_T_Ff, I_T_Hf, I_T_EE  = lrd.get_T(model,data,q_i,dq_i)
 
-    ddq,F_C = lrd.dynamics(model, data, q_i, dq_i, tau, F_EE, kp = 10.0, I_p_Ff0 = None, I_p_Hf0 = None)
+        eom = {'M_i':M_i, 'b_i':b_i, 'g_i':g_i, 
+               'I_J_Ba':I_J_Ba, 'I_J_Ff':I_J_Ff, 'I_J_Hf':I_J_Hf, 'I_J_EE':I_J_EE,
+               'I_dJ_Ba':I_Jd_Ba, 'I_dJ_Ff':I_Jd_Ff, 'I_dJ_Hf':I_Jd_Hf, 'I_dJ_EE':I_Jd_EE,
+               'I_T_Ba':I_T_Ba, 'I_T_Ff':I_T_Ff, 'I_T_Hf':I_T_Hf, 'I_T_EE':I_T_EE}
 
-    # print(f"{i} dynamics done")
+        # calc force and control
+        F_EE = calc_wall(I_T_EE,I_J_EE,dq_i,0.8)
+        tau = control_func(q_, dq_, eom, get_base_motion_trajectory, t_i)
 
-    q_i = q_i + dq_i*t_s
-    dq_i = dq_i + ddq*t_s
+        # calc dynamics
+        ddq,F_C = lrd.dynamics(eom, q_, dq_, tau, F_EE, kp = 10.0, I_p_Ff0 = None, I_p_Hf0 = None)
 
-    # print(ddq.shape, dq_i.shape, q_i.shape)
-    q_i = np.array(q_i, dtype=np.float64, copy=True)
-    dq_i = np.array(dq_i, dtype=np.float64, copy=True)
+        return ddq
+
+    # ddq,F_C = lrd.dynamics(model, data, q_i, dq_i, tau, F_EE, kp = 10.0, I_p_Ff0 = None, I_p_Hf0 = None)
+    # ddq = dyn(q_i,dq_i)
+
+    q_i,dq_i,ddq,t_s = step(q_i,dq_i,t_s,dyn)
+
+    # q_i = q_i + dq_i*t_s
+    # dq_i = dq_i + ddq*t_s
+
+    # # cre
+    # q_i = np.array(q_i, dtype=np.float64, copy=True)
+    # dq_i = np.array(dq_i, dtype=np.float64, copy=True)
 
     # tau = lrd.control_pd_g(q_i,dq_i,g_i,S)
-    tau = lrd.control_floating_base(model,data, q_i, dq_i, get_base_motion_trajectory, t_i)
+    # tau = lrd.control_floating_base(model,data, q_i, dq_i, get_base_motion_trajectory, t_i)
     # tau = lrd.control_hybrid_force(model,data, q_i, dq_i, get_base_motion_trajectory, t_i)
 
-    # print(f"{i} control done")
-    # print(f"tau: {tau.shape} {tau}")
-    tau = np.array(tau, dtype=np.float64, copy=True)
+    # tau = np.array(tau, dtype=np.float64, copy=True)
 
     t_i += t_s
 
@@ -194,14 +174,8 @@ for i in range(N_steps):
         print(f"\nStopped simulation loop, reached final time.")
         break
 
-    # # move desired position
-    # if flag_moving:
-    #     r_des = _move_r_des(t_i)
-
 t_elapsed = perf_counter() - t_start
 pbar.close()
-
-print(q_i)
 
 print(f"TIMING:\n Simulation time: {t_elapsed:.3f} s\n Average time/step: {t_elapsed / it_final * 1000:.3f} ms")
 
@@ -215,7 +189,7 @@ data_hist = np.array([
     for q, dq, ddq, H, E_kin, E_pot, t in hist_
 ])
 header = "q1 q2 q3 q4 q5 q6 dq1 dq2 dq3 dq4 dq5 dq6 ddq1 ddq2 ddq3 ddq4 ddq5 ddq6 H E_kin E_pot t"
-file_name = f"/bin/hist_SimpleANYmal_control_{controller}.txt"
+file_name = f"/bin/hist_SimpleANYmal_{controller}.txt"
 np.savetxt(repo_root+file_name, data_hist, header=header)
 print(f"Saved history: {file_name}")
 
@@ -237,7 +211,7 @@ ax.set_ylabel("Energy")
 ax.grid(True)
 ax.legend()
 
-img_name = f"/bin/SimpleANYmal_control_{controller}_energy.png"
+img_name = f"/bin/SimpleANYmal_{controller}_energy.png"
 plt.savefig(repo_root+img_name)
 print(f"Saved plot: {img_name}")
 
@@ -252,7 +226,7 @@ ax.set_ylabel("Angle [rad]")
 ax.grid(True)
 ax.legend()
 
-img_name = f"/bin/SimpleANYmal_control_{controller}_q.png"
+img_name = f"/bin/SimpleANYmal_{controller}_q.png"
 plt.savefig(repo_root+img_name)
 print(f"Saved plot: {img_name}")
 
@@ -270,7 +244,7 @@ ax.set_xlabel("X [m]")
 ax.set_ylabel("Y [m]")
 ax.grid(True)
 ax.plot()
-img_name = f"/bin/SimpleANYmal_control_position.png"
+img_name = f"/bin/SimpleANYmal_{controller}_position.png"
 fig.legend()
 plt.savefig(repo_root+img_name)
 print(f"Saved plot: {img_name}")

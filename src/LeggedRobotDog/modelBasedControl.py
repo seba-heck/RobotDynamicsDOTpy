@@ -44,9 +44,10 @@ SELECTION_MAT = np.hstack([
     ])
 
 
-def control_pd_g(q, dq, g,
+def control_pd_g(q, dq, eom, *args,
                  S=SELECTION_MAT,q_des=PD_G_Q_STAR_J,dq_des=PD_G_DQ_STAR_J):
     """Joint-space PD controller with gravity compensation on zero velocity references."""
+    g = eom['g_i']
 
     # Joint configurations and velocities
     q_j = q[3:10].reshape(-1,1)
@@ -64,29 +65,29 @@ def control_pd_g(q, dq, g,
 
     return tau
 
-def control_floating_base(model,data, q, dq, base_motion_trajectory, t, 
+def control_floating_base(q, dq, eom, base_motion_trajectory, t, 
                           S=SELECTION_MAT, p_star_EE=FLOATING_BASE_P_STAR_EE, w_star_EE=FLOATING_BASE_W_STAR_EE, q0=FLOATING_BASE_Q0, print_solution=False):
-    """Joint-space PD controller with gravity compensation."""    
-    # Evaluate robot dynamics
-    M_i = np.asarray(get_M(model,data,q), dtype=float)
-    b_i = np.asarray(get_b(model,data,q,dq), dtype=float).reshape(-1, 1)
-    g_i = np.asarray(get_g(model,data,q), dtype=float).reshape(-1, 1)
-
-    I_J_Ba,I_J_Ff,I_J_Hf,I_J_EE = get_J(model,data,q)
-    I_Jd_Ba,I_Jd_Ff,I_Jd_Hf,I_Jd_EE = get_dJ(model,data,q,dq)
-    I_T_Ba,I_T_Ff,I_T_Hf,I_T_EE = get_T(model,data,q,dq)
+    """Joint-space PD controller with gravity compensation."""
+    M_i = eom['M_i']
+    b_i = eom['b_i']
+    g_i = eom['g_i']
+    I_J_Ba = eom['I_J_Ba']
+    I_J_Ff = eom['I_J_Ff']
+    I_J_Hf = eom['I_J_Hf']
+    I_J_EE = eom['I_J_EE']
+    I_Jd_Ba = eom['I_dJ_Ba']
+    I_Jd_Ff = eom['I_dJ_Ff']
+    I_Jd_Hf = eom['I_dJ_Hf']
+    I_Jd_EE = eom['I_dJ_EE']
+    I_T_Ff = eom['I_T_Ff']
+    I_T_Hf = eom['I_T_Hf']
+    I_T_EE = eom['I_T_EE']
     
     # Base position and velocity
     p_B = q[:3].copy()
     w_B = dq[:3].copy()
 
     # End-effector position & orientation and velocity
-    # p_EE = np.array([
-    #     I_T_EE[0, 3],
-    #     I_T_EE[2, 3],
-    #     np.arctan2(I_T_EE[0, 2], I_T_EE[0, 0])
-    # ]).reshape((3,1))
-    # w_EE = I_J_EE @ dq
     p_EE = get_position_EE(I_T_EE)
     w_EE = get_velocity_EE(I_J_EE,dq)
 
@@ -253,32 +254,6 @@ def control_floating_base(model,data, q, dq, base_motion_trajectory, t,
         np.array(b_f_c, dtype=np.float64, copy=True)
     ]
 
-    # for i, (Ai, bi) in enumerate(zip(A_tasks, b_tasks)):
-    #     Ai = np.asarray(Ai, dtype=np.float64)
-    #     bi = np.asarray(bi, dtype=np.float64)
-
-    #     print(
-    #         f"Task {i}: "
-    #         f"A={Ai.shape}, b={bi.shape}, "
-    #         f"finite={np.all(np.isfinite(Ai)) and np.all(np.isfinite(bi))}, "
-    #         f"rank={np.linalg.matrix_rank(Ai)}",
-    #         flush=True
-    #     )
-
-    # print("C:", C.shape, "d:", d.shape, flush=True)
-
-    # # np.savez(
-    # #     "bin/debug_hopt.npz",
-    # #     C=C,
-    # #     d=d,
-    # #     **{
-    # #         f"A{i}": A_tasks[i] for i in range(len(A_tasks))
-    # #     },
-    # #     **{
-    # #         f"b{i}": b_tasks[i] for i in range(len(b_tasks))
-    # #     }
-    # # )
-
     # Solve hierarchical QPs
     try:
         x_opt = hopt(
@@ -288,9 +263,6 @@ def control_floating_base(model,data, q, dq, base_motion_trajectory, t,
             d,
             print_solution
         )
-
-        # print("[CTRL] hopt returned", flush=True)
-        # print("x_opt:", x_opt.shape, np.all(np.isfinite(x_opt)), flush=True)
 
     except Exception as e:
         print("\n[ERROR] Hierarchical optimization failed!")
@@ -311,30 +283,31 @@ def control_floating_base(model,data, q, dq, base_motion_trajectory, t,
 
     return tau
 
-def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
+def control_hybrid_force(q, dq, eom, base_motion_trajectory, t, 
+                          S=SELECTION_MAT, p_star_EE_z=0.6, f_star_EE=np.array([ [-0.7], [0.0], [0.0]]), q0=FLOATING_BASE_Q0, print_solution=False):
     """Joint-space PD controller with gravity compensation."""    
-    # Evaluate robot dynamics
-    M_i = np.asarray(get_M(model,data,q), dtype=float)
-    b_i = np.asarray(get_b(model,data,q,dq), dtype=float).reshape(-1, 1)
-    g_i = np.asarray(get_g(model,data,q), dtype=float).reshape(-1, 1)
-
-    I_J_Ba,I_J_Ff,I_J_Hf,I_J_EE = get_J(model,data,q)
-    I_Jd_Ba,I_Jd_Ff,I_Jd_Hf,I_Jd_EE = get_dJ(model,data,q,dq)
-    I_T_Ba,I_T_Ff,I_T_Hf,I_T_EE = get_T(model,data,q,dq)
+    M_i = eom['M_i']
+    b_i = eom['b_i']
+    g_i = eom['g_i']
+    I_J_Ba = eom['I_J_Ba']
+    I_J_Ff = eom['I_J_Ff']
+    I_J_Hf = eom['I_J_Hf']
+    I_J_EE = eom['I_J_EE']
+    I_Jd_Ba = eom['I_dJ_Ba']
+    I_Jd_Ff = eom['I_dJ_Ff']
+    I_Jd_Hf = eom['I_dJ_Hf']
+    I_Jd_EE = eom['I_dJ_EE']
+    I_T_Ff = eom['I_T_Ff']
+    I_T_Hf = eom['I_T_Hf']
+    I_T_EE = eom['I_T_EE']
     
     # Base position and velocity
     p_B = q[:3].copy()
     w_B = dq[:3].copy()
 
-    # End-effector position and orientation
-    p_EE = np.array([
-        I_T_EE[0, 3],
-        I_T_EE[2, 3],
-        np.arctan2(I_T_EE[0, 2], I_T_EE[0, 0])
-    ]).reshape((3,1))
-
-    # End-effector velocity
-    w_EE = I_J_EE @ dq
+    # End-effector position & orientation and velocity
+    p_EE = get_position_EE(I_T_EE)
+    w_EE = get_velocity_EE(I_J_EE,dq)
 
     # ============================================================
     # 5. Contact Jacobian
@@ -353,44 +326,25 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ============================================================
     # 6. Control references
     # ============================================================
-
     # Base trajectory
     p_star_B, w_star_B = base_motion_trajectory(t)
 
     p_star_B = np.asarray(p_star_B).reshape(3, 1)
     w_star_B = np.asarray(w_star_B).reshape(3, 1)
 
-    # Desired end-effector z position
-    p_star_EE_z = 0.6
-
-    # Desired end-effector wrench
-    f_star_EE = np.array([
-        [-0.7],
-        [0.0],
-        [0.0]
-    ])
-
     # ============================================================
     # 7. Optimization variables
     # ============================================================
-
     # x_opt = [ddq (10), f_c (4), tau (7), f_EE (3)]
-    n = 24
+    # n = 24
 
-    Z_10 = np.zeros((10, 14))
-    Z_7 = np.zeros((7, 17))
-    Z_3 = np.zeros((3, 21))
+    # Z_10 = np.zeros((10, 14))
+    # Z_7 = np.zeros((7, 17))
+    # Z_3 = np.zeros((3, 21))
 
     # ============================================================
     # 8. Optimization tasks
     # ============================================================
-
-    # Selection matrix for seven actuated joints
-    S = np.hstack([
-        np.zeros((7, 3)),
-        np.eye(7)
-    ])
-
     # ------------------------------------------------------------
     # Task 0: Equations of motion
     # ------------------------------------------------------------
@@ -401,15 +355,11 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
         -I_J_EE.T
     ])
 
-    # Pinocchio's nonLinearEffects includes gravity.
-    # Therefore use -b instead of -b-g if get_b() is
-    # implemented using pin.nonLinearEffects().
     b_eom = -b_i - g_i
 
     # ------------------------------------------------------------
     # Task 1: No foot-contact motion
     # ------------------------------------------------------------
-
     A_c = np.hstack([
         J_c,
         np.zeros((4, 14))
@@ -420,7 +370,6 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ------------------------------------------------------------
     # Task 2: End-effector force
     # ------------------------------------------------------------
-
     A_force_ee = np.hstack([
         np.zeros((3, 21)),
         np.eye(3)
@@ -467,12 +416,12 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ------------------------------------------------------------
     # Task 5: Kinematic null-space position control
     # ------------------------------------------------------------
-    q0 = np.array([
-        0.0, 0.50, 0.0,
-        0.9, -1.5,
-        0.9, -1.5,
-        0.9, 0.7, 0.4
-    ]).reshape(10, 1)
+    # q0 = np.array([
+    #     0.0, 0.50, 0.0,
+    #     0.9, -1.5,
+    #     0.9, -1.5,
+    #     0.9, 0.7, 0.4
+    # ]).reshape(10, 1)
 
     kp_0 = 1.0
     kd_0 = 2.0 * np.sqrt(kp_0)
@@ -509,11 +458,9 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ============================================================
     # 9. Inequality constraints
     # ============================================================
-
     # ------------------------------------------------------------
     # Torque limits
     # ------------------------------------------------------------
-
     tau_max = 50.0
 
     C_tau_up = np.hstack([
@@ -530,7 +477,6 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ------------------------------------------------------------
     # Friction cone
     # ------------------------------------------------------------
-
     mu = 0.5
 
     C_cone = np.array([
@@ -550,7 +496,6 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ============================================================
     # 10. Assemble hierarchy
     # ============================================================
-
     A = [
         A_eom,
         A_c,
@@ -589,9 +534,6 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ============================================================
     # 11. Solve hierarchical QPs
     # ============================================================
-
-    print_solution = False
-
     x_opt = hopt(
         A,
         b_tasks,
@@ -605,10 +547,16 @@ def control_hybrid_force(model,data, q, dq, base_motion_trajectory, t):
     # ============================================================
     # 12. Extract torques
     # ============================================================
-
     ddq = x_opt[:10]
     f_c = x_opt[10:14]
     tau = x_opt[14:21]
     F_EE = x_opt[21:24]
 
     return tau
+
+
+ALL_CONTROL_FUNCS = {
+    "PDg": control_pd_g,
+    "FlB": control_floating_base,
+    "HyF": control_hybrid_force,
+}
